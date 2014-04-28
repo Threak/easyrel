@@ -10,7 +10,7 @@ import clnns
 
 #name of config file where all keys get stored
 config = '~/.config/clnns/clnns.json'
-nzb_path = './nzbs'
+nzb_path = '~/.get_fav/nzbs'
 
 def decode_json(resp):
 
@@ -93,6 +93,6 @@ for favlist in favdict:
 	new_dir = os.path.join(nzb_path, favlist)
 	for rel in favdict[favlist]:
 		print 'Searching for: %s' % rel
-		cmd = 'python ./clnns.py -d -f -o "%s" "%s"' % (new_dir, rel)
+		cmd = './clnns.py -d -f -o "%s" "%s"' % (new_dir, rel)
 		#print cmd
 		os.system(cmd)

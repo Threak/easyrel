@@ -4,24 +4,14 @@ from __future__ import with_statement
 import argparse,feedparser,shutil,os,socket,sys,time,json
 import urllib2, urllib
 
+#name of config file where all keys get stored
 config = '~/.config/clnns/clnns.json'
 
 def init_configparser(filename):
 	filename = os.path.expanduser(filename)
 	if not os.path.isfile(filename):
-		if not os.path.isdir(os.path.dirname(filename)):
-			try:
-				os.makedirs(os.path.dirname(filename))
-			except:
-				sys.exit(1)
-		try:
-			with open(filename, 'w') as f:
-				f.write(content)
-			print 'Config file written to: %s.' % (filename)
-			sys.exit(0)
-		except:
-			print 'Error writing config'
-			sys.exit(1)
+		print 'please run auth_xrel first'
+		exit(-42)
 
 	with open(filename, 'r') as cfg:
 		config = json.loads(cfg.read())
@@ -80,7 +70,7 @@ def init_argparse(config):
 		args['category'] = '&cat=' + args['category']
 
 	if args['provider'] is None:
-		args['provider'] = config['hosts'][firsthost].split(';')
+		args['provider'] = [config['hosts'][firsthost]['url'], config['hosts'][firsthost]['api']]
 	else:
 		try:
 			config['hosts'][args['provider']]
@@ -167,7 +157,7 @@ def main(args):
 
 	i = 0
 	for r in apiresponse.entries:
-		print '[%s]\t%s\n\t   %s -- %s\n' % ((i+1)), r['title'], r['category'], r['published']
+		print '[%s]\t%s\n\t   %s -- %s\n' % ((i+1), r['title'], r['category'], r['published'])
 		i += 1
 
 	rs = raw_input('enter #s to download (eg.: 1 2 4-6): ')

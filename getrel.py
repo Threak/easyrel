@@ -8,8 +8,9 @@ import json
 
 import clnns
 
-config_file = '~/.config/clnns/clnns.json'
-nzb_path = '~/Software/clnns/nzbs'
+#name of config file where all keys get stored
+config = '~/.config/clnns/clnns.json'
+nzb_path = './nzbs'
 
 def decode_json(resp):
 
@@ -29,8 +30,8 @@ def decode_json(resp):
 
 	return fav_list
 
-def get_new(list_id, config_file):
-	with open(config_file, 'r') as f:
+def get_new(list_id, config):
+	with open(config, 'r') as f:
 		config_dict = json.loads(f.read())
 
 	config_xrel = config_dict['xrel']
@@ -47,9 +48,9 @@ def get_new(list_id, config_file):
 	favs = content[11:-3]
 	return decode_json(favs)
 
-config_file = os.path.expanduser(config_file)
+config = os.path.expanduser(config)
 try:
-	with open(config_file, 'r') as f:
+	with open(config, 'r') as f:
 		config_dict = json.loads(f.read())
 except IOError:
 	print 'please run auth_xrel first'
@@ -72,7 +73,7 @@ favlists = json.loads(content[11:-3])['payload']
 nzb_path = os.path.expanduser(nzb_path)
 for favlist in favlists:
 	listname = favlist['name']
-	if listname in config_dict['skip_lists']:
+	if listname in config_dict['skip']:
 		continue
 	listid = favlist['id']
 	new_dir = os.path.join(nzb_path, listname)
@@ -92,5 +93,6 @@ for favlist in favdict:
 	new_dir = os.path.join(nzb_path, favlist)
 	for rel in favdict[favlist]:
 		print 'Searching for: %s' % rel
-		cmd = './clnns.py -d -f -o "%s" "%s"' % (new_dir, rel)
+		cmd = 'python ./clnns.py -d -f -o "%s" "%s"' % (new_dir, rel)
+		#print cmd
 		os.system(cmd)

@@ -1,98 +1,200 @@
 #!/usr/bin/env python2
-# -*- coding: utf-8 -*-
 
-import os
-import os.path
-import oauth2 as oauth
-import json
-
-import clnns
+from __future__ import with_statement
+import argparse,feedparser,shutil,os,socket,sys,time,json
+import urllib2, urllib
+from font_colors import font_colors
 
 #name of config file where all keys get stored
-config = '~/.config/clnns/clnns.json'
-nzb_path = '~/.get_fav/nzbs'
+config = '~/.config/getrel/getrel.json'
 
-def decode_json(resp):
+def init_configparser(filename):
+	filename = os.path.expanduser(filename)
+	if not os.path.isfile(filename):
+		print 'please run auth_xrel first'
+		exit(-42)
 
-	fav_dict = json.loads(resp)
+	with open(filename, 'r') as cfg:
+		config = json.loads(cfg.read())
 
-	fav_list = []
+	if len(config['hosts']) == 0:
+		print 'Hosts list is empty - edit config at: %s.' % (filename)
+		sys.exit(1)
 
-	for fav in fav_dict['payload']:
-		#print fav
-		#if there are no releases in any list, the key 'releases' does not exist
-		if ('releases' not in fav):
+	return config
+
+def init_argparse(config):
+	from optparse import OptionParser
+	import os
+
+	parser = OptionParser()
+	parser.add_option('--query', '-q', help='search string', dest='query')
+	parser.add_option('--provider', '-p', help='alias of provider', dest='provider', default=None)
+	parser.add_option('--group', '-g', help='group #', dest='group', default='')
+	parser.add_option('--category', '-c', help='sabnzbd category for nzb', default='Default')
+	parser.add_option('--limit', '-l', help='maximum number of results', dest='limit', type='int', default=15)
+	parser.add_option('--maxage', '-m', help='maximum age of results in days', dest='maxage', type='int', default=1500)
+	parser.add_option('--offset', help='results offset from 0', dest='offset', type='int', default=0)
+	parser.add_option('--output', '-o', help='output dir', dest='output', default=os.getcwdu())
+
+	parser.add_option('--first', '-f', action='store_true', help='grab first result without prompt', default=False)
+	parser.add_option('--download', '-d', action='store_true', help='do not send to sab even if set in ini', default=False)
+	parser.add_option('--sleep', '-s', help='number of seconds to wait between requests', default=1)
+
+	(options, args) = parser.parse_args()
+	args = vars(options)
+	#return check_args(args, config)
+	return args
+
+def check_args(args, config):
+	if 'sabnzbd' in config:
+		try:
+			args['sabnzbd_nzbkey'] = config['sabnzbd']['api']
+			args['sabnzbd_url'] = config['sabnzbd']['url']
+		except:
+			print 'could not read api or url from config'
+
+	for h in config['hosts']:
+		 firsthost = h
+		 break
+
+	if not args['query']:
+		print 'Specify search query using --query QUERY'
+		sys.exit(-2)
+	else:
+		args['query'] = '&q=' + args['query']
+
+	if len(args['group']) > 0:
+		args['group'] = '&cat=' + args['group']
+
+	if args['provider'] is None:
+		url = config['hosts'][firsthost]['url']
+		api = config['hosts'][firsthost]['api']
+		args['provider'] = [url, api]
+	else:
+		try:
+			config['hosts'][args['provider']]
+		except:
+			print 'Provider %r not found in config.' % args['provider']
+			sys.exit(1)
+		args['provider'] = config['hosts'][args['provider']].split(';')
+
+	if len(args['provider'][1]) != 32:
+		print 'API key for %r is incorrect length - edit config file.' % (args['provider'][0])
+		sys.exit(1)
+
+	if 'sabnzbd_nzbkey' in args:
+		if len(args['sabnzbd_nzbkey']) != 32:
+			print 'NZB key for SABnzbd+ is incorrect length - edit config file.'
+			sys.exit(1)
+
+	args['limit'] = '&limit=%d' % args['limit']
+	args['maxage'] = '&maxage=%d' % args['maxage']
+	args['offset'] = '&offset=%d' % args['offset']
+
+	return args
+
+def sendtosab(link, title, url, nzbkey, category):
+	try:
+		socket.setdefaulttimeout(30)
+		api = '%s/api?mode=addurl&apikey=%s&nzbname=%s&name=%s&cat=%s' % (url, nzbkey, title.replace(' ', '_'), urllib.quote(link), urllib.quote(category))
+		urllib2.urlopen(urllib2.Request(api.replace('//api?', '/api?')))
+	except:
+		print 'could not add nzb'
+		return False
+
+	print '%s%s%s successfully sent to SABnzbd at: %s' % (font_colors.f_green, title, font_colors.f_reset, url)
+	return True
+
+
+def getnzb(link, title, output):
+	if not os.path.isdir(output):
+		try:
+			os.makedirs(output)
+		except:
+			return False
+
+	output = os.path.join(output, title.replace(' ', '_') + '.nzb')
+
+	try:
+		socket.setdefaulttimeout(30)
+		urllib.urlretrieve(link, output)
+	except:
+		return False
+
+	if os.path.getsize(output) == 0 or not os.path.isfile(output):
+		print 'Error downloading: %s' % (title)
+		try:
+			os.unlink(output)
+		except:
+			return False
+
+	print '%s%s%s downloaded successfully' % (font_colors.f_green, title, font_colors.f_reset)
+	return True
+
+def main(args):
+	#print '%s using...' % args['provider'][0]
+
+	try:
+		url = '%s/api?t=search%s&apikey=%s%s%s%s%s' % (args['provider'][0], args['group'], args['provider'][1], args['limit'], args['maxage'], args['offset'], args['query'])
+		apiresponse = feedparser.parse(url.replace('//api?t', '/api?t').replace(' ', '%20'))
+	except:
+		return False
+
+	results = len(apiresponse.entries)
+	if apiresponse.entries is None or results == 0:
+		print '%s%s%s not found...' % (font_colors.f_red, args['query'][3:], font_colors.f_reset)
+		return False
+
+	if args['first'] == True:
+		if args['download'] == False and 'sabnzbd_url' in args:
+			if sendtosab(apiresponse.entries[0]['link'], args['query'][3:], args['sabnzbd_url'], args['sabnzbd_nzbkey'], args['category']) == False:
+				return False
+		else:
+			if getnzb(apiresponse.entries[0]['link'], args['query'][3:], args['output']) == False:
+				return False
+		return True
+
+	print '\t%d results for %s.\n' % (results, args['query'][3:], )
+
+	i = 0
+	for r in apiresponse.entries:
+		print '[%s]\t%s\n\t   %s -- %s\n' % ((i+1), r['title'], r['category'], r['published'])
+		i += 1
+
+	rs = raw_input('enter number(s) to download: ')
+	if len(rs) == 0:
+		return False
+
+	rs = rs.split(' ')
+	get = []
+	for n in rs:
+		if n.strip() == '':
 			continue
-		if (fav['releases']):
-			#print fav['releases']
-			for dirname in fav['releases']:
-				fav_list.append(dirname['dirname'])
+		if '-' in n:
+			n = n.split('-')
+			for i in xrange(int(n[0]), (int(n[1])+1)):
+				get.append((i-1))
+		else:
+			get.append((int(n)-1))
 
-	return fav_list
+	for i in get:
+		if i > results:
+			 continue
+		if args['download'] == False and args['sabnzbd_url'] is not None:
+			if sendtosab(apiresponse.entries[i]['link'], args['query'][3:], args['sabnzbd_url'], args['sabnzbd_nzbkey'], args['category']) == False:
+				return False
+		else:
+			if getnzb(apiresponse.entries[i]['link'], args['query'][3:], args['output']) == False:
+				return False
+		time.sleep(args['sleep'])
 
-def get_new(list_id, config):
-	with open(config, 'r') as f:
-		config_dict = json.loads(f.read())
+	return True
 
-	config_xrel = config_dict['xrel']
-	consumer_key = config_xrel['consumer_key']
-	consumer_secret = config_xrel['consumer_secret']
-	oauth_token = config_xrel['oauth_token']
-	oauth_token_secret = config_xrel['oauth_token_secret']
-	url = "http://api.xrel.to/api/favs/list_entries.json?id=%s&get_releases=true" % str(list_id)
-	consumer = oauth.Consumer(key=consumer_key, secret=consumer_secret)
-	token = oauth.Token(key=oauth_token, secret=oauth_token_secret)
-	client = oauth.Client(consumer, token)
-	
-	resp, content = client.request(url)
-	favs = content[11:-3]
-	return decode_json(favs)
-
-config = os.path.expanduser(config)
-try:
-	with open(config, 'r') as f:
-		config_dict = json.loads(f.read())
-except IOError:
-	print 'please run auth_xrel first'
-	exit(-42)
-
-config_xrel = config_dict['xrel']
-
-consumer_key = config_xrel['consumer_key']
-consumer_secret = config_xrel['consumer_secret']
-oauth_token = config_xrel['oauth_token']
-oauth_token_secret = config_xrel['oauth_token_secret']
-url = 'http://api.xrel.to/api/favs/lists.json'
-consumer = oauth.Consumer(key=consumer_key, secret=consumer_secret)
-token = oauth.Token(key=oauth_token, secret=oauth_token_secret)
-client = oauth.Client(consumer, token)
-resp, content = client.request(url)
-
-favdict = {}
-favlists = json.loads(content[11:-3])['payload']
-nzb_path = os.path.expanduser(nzb_path)
-for favlist in favlists:
-	listname = favlist['name']
-	if listname in config_dict['skip']:
-		continue
-	listid = favlist['id']
-	new_dir = os.path.join(nzb_path, listname)
-	if not os.path.exists(new_dir):
-		os.makedirs(new_dir)
-	url = 'http://api.xrel.to/api/favs/list_entries.json?id=%s&get_releases=true' % str(listid)
-	resp, content = client.request(url)
-	favdict[listname] = []
-	for fav in json.loads(content[11:-3])['payload']:
-		if ('releases' not in fav):
-			continue
-		if (fav['releases']):
-			for dirname in fav['releases']:
-				favdict[listname].append(dirname['dirname'])
-
-for favlist in favdict:
-	new_dir = os.path.join(nzb_path, favlist)
-	for rel in favdict[favlist]:
-		print 'Searching for: %s' % rel
-		cmd = './clnns.py -d -f -o "%s" "%s"' % (new_dir, rel)
-		#print cmd
-		os.system(cmd)
+		
+if __name__ == '__main__':
+	config_args = init_argparse(config)
+	parsed_config = init_configparser(config)
+	checked_args = check_args(config_args, parsed_config)
+	if main(checked_args) == False:
+		sys.exit(1)

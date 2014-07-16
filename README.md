@@ -19,5 +19,6 @@ or
 ## notes:
 * currently *nix only - but compatible with Windows too if you fix the config path.
 * config is created on first run - requires editing.
+* Location: .config/getrel/
 
 [feedparser]: https://pypi.python.org/pypi/feedparser/

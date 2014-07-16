@@ -1,11 +1,11 @@
-clnns
+easyrel
 =====
 
-clnns searches newznab providers on the command line.
+easyrel searches newznab providers on the command line.
 
 * configurable for multiple newznab hosts.
 * 'send to SABnzbd+' functionality.
-* pronounced 'coolness'.
+* batch from xrel fav lists.
 
 ## dependencies:
 * Python 2

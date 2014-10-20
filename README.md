@@ -3,9 +3,11 @@ easyrel
 
 easyrel searches newznab providers on the command line.
 
-* configurable for multiple newznab hosts.
-* 'send to SABnzbd+' functionality.
-* batch from xrel fav lists.
+* silent mode automatically picks first match
+* send directly to SABnzbd without downloading the nzb
+* batch download new relaseses from your xREL favorite lists
+* block specific lists from searching, thus downloading
+* can now mark grabbed releases as read on xREL
 
 ## dependencies:
 * Python 2
@@ -17,8 +19,7 @@ or
 * getfav.py (search for all new releases in your fav lists)
 
 ## notes:
-* currently *nix only - but compatible with Windows too if you fix the config path.
-* config is created on first run - requires editing.
+* config is created on first run - requires editing
 * Location: .config/getrel/
 
 [feedparser]: https://pypi.python.org/pypi/feedparser/

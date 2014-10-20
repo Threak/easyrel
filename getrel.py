@@ -39,7 +39,7 @@ def init_argparse(config):
 
 	parser.add_option('--first', '-f', action='store_true', help='grab first result without prompt', default=False)
 	parser.add_option('--download', '-d', action='store_true', help='do not send to sab even if set in ini', default=False)
-	parser.add_option('--sleep', '-s', help='number of seconds to wait between requests', default=1)
+	parser.add_option('--sleep', '-s', help='number of seconds to wait between requests', default=0.5)
 
 	(options, args) = parser.parse_args()
 	args = vars(options)

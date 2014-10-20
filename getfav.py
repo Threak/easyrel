@@ -7,13 +7,14 @@ import oauth2 as oauth
 import json
 from font_colors import font_colors
 import getrel
+import setfav
+import time
 
 #name of config file where all keys get stored
 config = '~/.config/getrel/getrel.json'
 nzb_path = '~/.get_fav/nzbs'
 
 def decode_json(resp):
-
 	fav_dict = json.loads(resp)
 
 	fav_list = []
@@ -29,24 +30,6 @@ def decode_json(resp):
 				fav_list.append(dirname['dirname'])
 
 	return fav_list
-
-def get_new(list_id, config):
-	with open(config, 'r') as f:
-		config_dict = json.loads(f.read())
-
-	config_xrel = config_dict['xrel']
-	consumer_key = config_xrel['consumer_key']
-	consumer_secret = config_xrel['consumer_secret']
-	oauth_token = config_xrel['oauth_token']
-	oauth_token_secret = config_xrel['oauth_token_secret']
-	url = "http://api.xrel.to/api/favs/list_entries.json?id=%s&get_releases=true" % str(list_id)
-	consumer = oauth.Consumer(key=consumer_key, secret=consumer_secret)
-	token = oauth.Token(key=oauth_token, secret=oauth_token_secret)
-	client = oauth.Client(consumer, token)
-	
-	resp, content = client.request(url)
-	favs = content[11:-3]
-	return decode_json(favs)
 
 config = os.path.expanduser(config)
 try:
@@ -81,22 +64,40 @@ for favlist in favlists:
 	new_dir = os.path.join(nzb_path, listname)
 	if not os.path.exists(new_dir):
 		os.makedirs(new_dir)
-	url = 'http://api.xrel.to/api/favs/list_entries.json?id=%s&get_releases=true' % str(listid)
+	url = 'http://api.xrel.to/api/favs/list_entries.json?id=%d&get_releases=true' % listid
 	resp, content = client.request(url)
-	favdict[listname] = []
+	favdict[listid] = {'name': listname, 'rels': []}
 	for fav in json.loads(content[11:-3])['payload']:
 		if ('releases' not in fav):
 			continue
 		if (fav['releases']):
 			for dirname in fav['releases']:
-				favdict[listname].append(dirname['dirname'])
+				relid = int(dirname['link_href'].split('/')[4])
+				favdict[listid]['rels'].append({'name': dirname['dirname'], 'id': relid})
+
+try:
+	xrel_session = setfav.login({'username': config_xrel['username'], 'password': config_xrel['password']})
+except:
+	pass
 
 for favlist in favdict:
-	print '%s%s%s:' % (font_colors.f_magenta, favlist, font_colors.f_reset)
-	new_dir = os.path.join(nzb_path, favlist)
-	config_args['category'] = favlist.lower()
-	for rel in favdict[favlist]:
+	listname = favdict[favlist]['name']
+	print '%s%s%s:' % (font_colors.f_magenta, listname, font_colors.f_reset)
+	new_dir = os.path.join(nzb_path, listname)
+	config_args['category'] = listname.lower()
+	for reldict in favdict[favlist]['rels']:
+		rel = reldict['name']
 		print '%s%s%s searching...' % (font_colors.f_yellow, rel, font_colors.f_reset)
 		config_args['query'] = rel
 		checked_args = getrel.check_args(config_args.copy(), parsed_config)
-		getrel.main(checked_args)
+
+		set_fav_data = {
+			'anticache': long(time.time()), # unix time stamp (long)
+			'isnew': 0, # mark as new, otherwise mark as read (boolean)
+			'wid': favlist, # watchlist id (int)
+			'rid': reldict['id'] # release id (int)
+		}
+
+		if getrel.main(checked_args):
+			if xrel_session:
+				setfav.set_fav_state(xrel_session, set_fav_data)

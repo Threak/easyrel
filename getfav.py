@@ -9,6 +9,7 @@ from font_colors import font_colors
 import getrel
 import setfav
 import time
+from torrentApi import torrent_api as api
 
 #name of config file where all keys get stored
 config = '~/.config/getrel/getrel.json'
@@ -80,6 +81,11 @@ try:
 except:
 	pass
 
+prefer_torrent = config_dict['torrent']['prefer']
+torrent_download_path = config_dict['torrent']['dir']
+if prefer_torrent:
+	torrentApi = api.TorrentApi(base_path=torrent_download_path)
+
 for favlist in favdict:
 	listname = favdict[favlist]['name']
 	print '%s%s%s:' % (font_colors.f_magenta, listname, font_colors.f_reset)
@@ -98,6 +104,11 @@ for favlist in favdict:
 			'rid': reldict['id'] # release id (int)
 		}
 
-		if getrel.main(checked_args):
+		found_release = False
+		if prefer_torrent:
+			found_release = torrentApi.search(rel)
+		if not found_release:
+			found_release = getrel.main(checked_args)
+		if found_release:
 			if xrel_session:
 				setfav.set_fav_state(xrel_session, set_fav_data)
